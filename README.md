@@ -134,8 +134,3 @@ Troubleshooting:
 - Proposals flow back to the orchestrator which updates the open set and g-scores.
 
 This keeps correctness with a clear owner of the frontier while still parallelizing expensive neighbor evaluations.
-
-## Notes and next steps
-
-- The example uses relative imports to keep things simple within this repo. If you publish as a module, update imports and add a `go.mod` with your module path.
-- Embedding the static files with Go's `embed` package would remove working-directory concerns a potential future improvement.
