@@ -12,7 +12,7 @@ import (
 	"strconv"
 	"time"
 
-	astar "../.."
+	astar "github.com/pdrpinto/astar"
 )
 
 type point = [2]int
