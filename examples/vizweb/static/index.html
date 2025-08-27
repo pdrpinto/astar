@@ -1,0 +1,140 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>A* Viz (4 it/s)</title>
+  <style>
+    body { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; background:#111; color:#ddd; }
+    #wrap { display:flex; gap:16px; align-items:flex-start; }
+    canvas { background:#000; image-rendering: pixelated; border:1px solid #333; }
+    .legend { line-height:1.6; }
+    button, input { background:#222; color:#ddd; border:1px solid #444; padding:6px 10px; }
+    label { margin-right:8px; }
+  </style>
+</head>
+<body>
+  <div id="wrap">
+    <div>
+      <canvas id="c" width="800" height="480"></canvas>
+      <div class="legend">
+        <p>Legend: <span style="color:#0f0">S</span> start, <span style="color:#f33">G</span> goal, <span style="color:#888">#</span> wall, <span style="color:#0af">+</span> open, <span style="color:#fa0">x</span> closed, <span style="color:#ff0">*</span> path, <span style="color:#fff">C</span> current</p>
+        <p>Status: <span id="status">—</span></p>
+      </div>
+    </div>
+    <div>
+      <div>
+        <label>W <input id="w" type="number" value="40" min="8" max="200"></label>
+        <label>H <input id="h" type="number" value="24" min="8" max="200"></label>
+      </div>
+      <div style="margin-top:8px;">
+        <label>clusters <input id="clusters" type="number" value="8" min="1" max="200"></label>
+        <label>steps <input id="steps" type="number" value="200" min="10" max="10000"></label>
+      </div>
+      <div style="margin-top:8px;">
+        <label>density <input id="density" type="number" value="0.25" min="0" max="1" step="0.05"></label>
+      </div>
+      <div style="margin-top:8px;">
+        <button id="regen">Regenerate</button>
+  <button id="step">Step</button>
+        <button id="play">Play</button>
+        <button id="pause">Pause</button>
+  <label style="margin-left:12px;">it/s <input id="rate" type="number" value="4" min="1" max="60" style="width:64px"></label>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const cvs = document.getElementById('c');
+    const ctx = cvs.getContext('2d');
+    const statusEl = document.getElementById('status');
+
+  let cell = 16; // pixels per cell
+  let W=40, H=24;
+  let playing = false;
+  let timer = null;
+  let busy = false;
+
+    function drawSnap(s) {
+      const w = s.w, h = s.h;
+      // scale canvas to fit
+      cell = Math.max(6, Math.min(24, Math.floor(Math.min(cvs.width/w, cvs.height/h))));
+      ctx.fillStyle = '#000'; ctx.fillRect(0,0,cvs.width,cvs.height);
+
+      const toKey = (xy)=> xy[0]+','+xy[1];
+      const walls = new Set((s.walls||[]).map(toKey));
+      const open = new Set((s.open||[]).map(toKey));
+      const closed = new Set((s.closed||[]).map(toKey));
+      const path = new Set((s.path||[]).map(toKey));
+
+      for (let y=0;y<h;y++){
+        for (let x=0;x<w;x++){
+          const k = x+','+y;
+          let color = '#111';
+          if (walls.has(k)) color = '#444';
+          if (closed.has(k)) color = '#a60';
+          if (open.has(k)) color = '#06c';
+          if (path.has(k)) color = '#cc0';
+          if (s.current && s.current[0]===x && s.current[1]===y) color = '#fff';
+          if (s.start && s.start[0]===x && s.start[1]===y) color = '#0a0';
+          if (s.goal && s.goal[0]===x && s.goal[1]===y) color = '#f33';
+          ctx.fillStyle = color;
+          ctx.fillRect(x*cell, y*cell, cell-1, cell-1);
+        }
+      }
+
+      statusEl.textContent = `step ${s.step} ${s.done? (s.found? '✓ path found' : '× no path'): ''}`;
+    }
+
+    async function init() {
+      const w = +document.getElementById('w').value;
+      const h = +document.getElementById('h').value;
+      const clusters = +document.getElementById('clusters').value;
+      const steps = +document.getElementById('steps').value;
+      const density = +document.getElementById('density').value;
+      await fetch(`/init?w=${w}&h=${h}&clusters=${clusters}&steps=${steps}&density=${density}`);
+      W=w; H=h;
+      statusEl.textContent = 'initialized';
+    }
+
+    async function next() {
+      if (busy) return; busy = true;
+      try {
+        const r = await fetch('/next');
+        const s = await r.json();
+        drawSnap(s);
+        if (s.done) pause();
+      } finally {
+        busy = false;
+      }
+    }
+
+    function setRateTimer() {
+      const rateEl = document.getElementById('rate');
+      const v = Math.max(1, Math.min(60, Number(rateEl.value)||4));
+      rateEl.value = String(v);
+      const interval = Math.max(25, Math.floor(1000 / v));
+      if (timer) clearInterval(timer);
+      timer = setInterval(next, interval);
+    }
+
+    function play() {
+      if (playing) return;
+      playing = true;
+      setRateTimer();
+    }
+    function pause() {
+      playing = false;
+      if (timer) clearInterval(timer);
+      timer = null;
+    }
+
+    document.getElementById('regen').onclick = async ()=>{ pause(); await init(); await next(); };
+    document.getElementById('step').onclick = async ()=>{ pause(); await next(); };
+    document.getElementById('play').onclick = ()=>{ play(); };
+    document.getElementById('pause').onclick = ()=>{ pause(); };
+    document.getElementById('rate').addEventListener('change', ()=>{ if (playing) setRateTimer(); });
+
+    (async ()=>{ await init(); await next(); })();
+  </script>
+</body>
+</html>
